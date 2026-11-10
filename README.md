@@ -11,6 +11,7 @@ MelanCare trains a convolutional neural network to classify dermoscopic images o
 - At a referral threshold fixed in advance, the model detected 92–94% of malignant or premalignant lesions on both test sets, with about 75% specificity.
 - On benign lesions confirmed by histopathology (the suspicious-looking ones that were excised), specificity fell to about 51%. On naevi diagnosed by follow-up it was 99%.
 - The Grad-CAM heatmap peaked on the lesion in 98% of images. The most confident errors (98–100% confidence) also looked at the lesion, so attention on the right area does not guarantee correct reasoning.
+- Without any correction for class imbalance, plain accuracy was highest (84%), but 39% of melanomas were missed. A class-weighted loss gave the best balanced accuracy, while the ability to rank lesions (AUC) was essentially unchanged.
 
 ## Scope
 
@@ -134,7 +135,25 @@ More examples: [correct predictions for each class](docs/figures/gradcam_correct
 
 ### Class imbalance comparison
 
-*In progress.* The weighted-loss model above is being compared with the same model trained without correction and with oversampling of rare classes ([notebook](notebooks/colab_imbalance_comparison.ipynb)).
+The same model was trained three ways, with everything else identical (data split, augmentations, schedule, seed):
+- **no correction**;
+- **oversampling**, where rare classes are drawn more often during training;
+- **weighted loss**, used for all results above.
+
+| Method | Balanced accuracy, internal (95% CI) | Balanced accuracy, external | Accuracy, internal | Melanoma sensitivity, internal / external* | Malignant AUC, internal (95% CI) |
+|---|---|---|---|---|---|
+| No correction | 0.710 (0.65–0.77) | 0.705 | **0.835** | 0.613 / 0.544 | **0.943** (0.926–0.958) |
+| Oversampling | 0.711 (0.65–0.77) | 0.739 | 0.725 | 0.690 / 0.620 | 0.892 (0.868–0.915) |
+| Weighted loss | **0.797** (0.75–0.84) | **0.751** | 0.772 | **0.762 / 0.737** | 0.935 (0.917–0.952) |
+
+\* When the model's top prediction is taken as the diagnosis.
+
+- **Plain accuracy is misleading.** The uncorrected model has the highest accuracy (84%) because it labels most lesions as naevi. It misses 39% of melanomas in the internal test set and 46% in the external one.
+- **The weighted loss gives the best balanced accuracy and melanoma detection** on both test sets.
+- **Imbalance correction mainly moves the decision point; it doesn't improve the model's ability to rank lesions.** The uncorrected and weighted models have almost identical AUCs (malignant 0.943 vs 0.935, melanoma 0.930 vs 0.923, overlapping CIs). With a referral threshold chosen on validation data, the uncorrected model performs comparably: melanoma sensitivity 0.935 at specificity 0.735, vs 0.911 at 0.708 for the weighted loss. For a referral tool with an explicitly set threshold, the correction method matters less than for top-prediction diagnosis.
+- **Oversampling performed worst.** It had the lowest AUC (malignant 0.892, with a confidence interval that doesn't overlap the other two models'). Its best validation score came after the first epoch and declined afterwards. This suggests it overfit to the small number of rare-class images it saw over and over (the training set has only 76 dermatofibromas, for example).
+
+These are single training runs per method, so smaller differences may partly reflect run-to-run variation. Full per-class tables: [results/imbalance_comparison.md](results/imbalance_comparison.md).
 
 ## Limitations
 
@@ -144,7 +163,7 @@ More examples: [correct predictions for each class](docs/figures/gradcam_correct
 - **Label quality:** diagnoses not confirmed by histopathology (follow-up or consensus) may contain errors, and each image has one label even when it shows more than one lesion.
 - **Overconfidence:** the model can be 98–100% confident and wrong; its probabilities are not calibrated and should not be read as risk estimates.
 - **Grad-CAM is coarse and partial:** the heatmap is computed on a 7×7 grid, so it can only roughly locate attention. A heatmap on the lesion does not prove the model uses clinically valid features, and one off the lesion does not prove it is wrong.
-- **Single training run:** confidence intervals reflect sampling uncertainty in the test sets, not variation between training runs.
+- **Single training run per configuration:** confidence intervals reflect sampling uncertainty in the test sets, not variation between training runs.
 
 ## How to run
 
@@ -211,8 +230,7 @@ tests/           unit tests (no data needed)
 
 ## Roadmap
 
-1. **Class imbalance comparison** (in progress, see above).
-2. **Skin tone and fairness:** evaluate how skin disease classification varies across Fitzpatrick skin types using Fitzpatrick17k (Groh et al., 2021). This dataset contains clinical photographs rather than dermoscopy, and covers 114 conditions, so it requires a separate model and analysis.
+1. **Skin tone and fairness:** evaluate how skin disease classification varies across Fitzpatrick skin types using Fitzpatrick17k (Groh et al., 2021). This dataset contains clinical photographs rather than dermoscopy, and covers 114 conditions, so it requires a separate model and analysis.
 
 ## References
 

@@ -17,6 +17,7 @@ from pathlib import Path
 from melancare.data import CLASSES
 
 SETS = {"test": "Internal test (HAM10000)", "external": "External test (ISIC 2018)"}
+METHOD_NAMES = {"none": "No correction", "sampler": "Oversampling", "weighted_loss": "Weighted loss"}
 
 
 def fmt(v: float, ci: list[float] | None = None) -> str:
@@ -41,7 +42,8 @@ def main() -> None:
             print(f"Skipping {run}: no evaluation/metrics.json")
             continue
         config = json.loads((run / "config.json").read_text())
-        runs.append((config.get("imbalance", run.name), json.loads(metrics_path.read_text())))
+        method = config.get("imbalance")
+        runs.append((METHOD_NAMES.get(method, method or run.name), json.loads(metrics_path.read_text())))
 
     md = []
     for key, title in SETS.items():
